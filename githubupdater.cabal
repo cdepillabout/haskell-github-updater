@@ -1,0 +1,22 @@
+
+Name:                github-updater
+Version:             0.0
+Description:         Super cool mega lambdas
+--License:             GPL
+--License-file:        LICENSE
+Author:              DMG
+--Maintainer:          
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+data-files:          install-and-test.sh, apache-vhost-example
+
+Executable github-updater.fcgi
+    main-is:           Main.hs
+    build-depends:     base, fastcgi, xhtml, hslogger, mtl, aeson, ghc-prim, text, process, unix, flock, lifted-base
+    ghc-options:       -Wall -threaded
+
+Executable tester
+    main-is:           Tester.hs
+    build-depends:     base, transformers, bytestring, conduit, http-conduit
+    ghc-options:       -Wall -threaded
+
