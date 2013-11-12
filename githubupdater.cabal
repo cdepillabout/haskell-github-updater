@@ -12,11 +12,16 @@ data-files:          install-and-test.sh, apache-vhost-example
 
 Executable github-updater.fcgi
     main-is:           Main.hs
-    build-depends:     base, fastcgi, xhtml, hslogger, mtl, aeson, ghc-prim, text, process, unix, flock, lifted-base
+    build-depends:     base, fastcgi, xhtml, hslogger, mtl, aeson, ghc-prim, text, process, unix, flock, lifted-base, cgi, regex-posix, regex-pcre
     ghc-options:       -Wall -threaded
 
 Executable tester
     main-is:           Tester.hs
     build-depends:     base, transformers, bytestring, conduit, http-conduit
+    ghc-options:       -Wall -threaded
+
+Executable trash
+    main-is:           Trash.hs
+    build-depends:     base, transformers, bytestring, conduit, http-conduit, utf8-string, text-icu
     ghc-options:       -Wall -threaded
 

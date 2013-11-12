@@ -4,7 +4,7 @@
 module Main ( main ) where
 
 import Data.Aeson (decode, FromJSON)
-import Data.ByteString.Lazy.Char8 (ByteString, pack, unpack)
+import Data.ByteString.Lazy.Char8 (ByteString, unpack)
 import Data.Maybe (fromMaybe)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Encoding (encodeUtf8)
@@ -22,6 +22,8 @@ import System.Log.Formatter
 import System.Posix.User
 import System.Process
 import Text.XHtml
+import Text.Regex.PCRE ((=~))
+
 
 _DEBUG_LEVEL :: Priority
 --_DEBUG_LEVEL = WARNING
@@ -33,6 +35,12 @@ data GithubResponse = GithubResponse { ref :: !Text } deriving (Show, Generic)
 
 instance FromJSON GithubResponse
 
+parseJsonByHand :: String -> IO String
+parseJsonByHand payload = do
+    let (_, _, _, groups) = (payload =~ ("\\{\"ref\":\"(.*?)\"" :: String)) :: (String, String, String, [String])
+    case groups of
+        [] -> return ""
+        (match:_) -> return match
 
 page :: Maybe String -> Html
 page Nothing = (body << h1 << ("Thanks GitHub!!"::String)) +++ (p << ("Request: Nothing!"::String))
@@ -41,7 +49,7 @@ page (Just request) = (body << h1 << ("Thanks GitHub!!"::String)) +++ (p << (("R
 getRepo :: ByteString -> Maybe Text
 getRepo jsonPayload = do
     jsonResponse <- decode jsonPayload
-    return (ref jsonResponse)
+    return $ ref jsonResponse
 
 repoPath :: String -> Maybe FilePath
 repoPath "refs/heads/develop" = Just "/var/www/html/api/latest"
@@ -120,8 +128,7 @@ updateRepo mylog repo = do
 
 cgiMain :: CGI CGIResult
 cgiMain = do
-    --myStreamHandler <- liftIO (liftM withFormatter $ streamHandler stderr _DEBUG_LEVEL)
-    --myStreamHandler <- withFormatter `liftM` (liftIO $ streamHandler stderr _DEBUG_LEVEL)
+    liftIO $ hSetEncoding stderr utf8
     myStreamHandler <- fmap withFormatter $ liftIO $ streamHandler stderr _DEBUG_LEVEL
     let mylog = rootLoggerName
     liftIO $ updateGlobalLogger mylog (setLevel _DEBUG_LEVEL)
@@ -130,21 +137,29 @@ cgiMain = do
     euid <- liftIO getEffectiveUserID
     liftIO $ debugM mylog $ "Real User ID: " ++ (show uid) ++ ", Effective User ID: " ++ (show euid)
 
-    payload <- getInput "payload"
-    liftIO $ debugM mylog $ "Payload: " ++ (fromMaybe "(No payload uploaded!)" payload)
-    case payload of
+    payloadString <- getInput "payload"
+    payloadByteString <- getInputFPS "payload"
+
+    liftIO $ debugM mylog $ "Payload String: " ++ (fromMaybe "(No payload uploaded!)" payloadString)
+
+    case payloadByteString of
         Nothing -> output $ renderHtml $ page Nothing
         Just payload' -> do
-            let repo = fmap encodeUtf8 $ getRepo (pack payload')
+            let repo = fmap encodeUtf8 $ getRepo payload'
             case repo of
-                Nothing -> liftIO $ debugM mylog $ "Couldn't get repo to update!"
+                Nothing -> do
+                    repo' <- liftIO $ parseJsonByHand $ unpack payload'
+                    case repo' of
+                        "" -> liftIO $ debugM mylog $ "Couldn't get repo to update!"
+                        _ -> liftIO $ updateRepo mylog repo'
                 Just repo' -> do
                     liftIO $ debugM mylog $ "Updating repo: " ++ (unpack repo')
                     liftIO $ updateRepo mylog (unpack repo')
-            output $ renderHtml $ page payload
+            output $ renderHtml $ page payloadString
 
 main :: IO ()
-main = runFastCGI $ handleErrors cgiMain
+main = do
+    runFastCGI $ handleErrors cgiMain
 
 withFormatter :: GenericHandler Handle -> GenericHandler Handle
 withFormatter handler = setFormatter handler formatter
